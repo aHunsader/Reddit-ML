@@ -20,99 +20,99 @@ def main(context):
 	# YOUR CODE HERE
 	# YOU MAY ADD OTHER FUNCTIONS AS NEEDED
 
-	context.udf.register("sanitize", san)
-	context.udf.register("three", remove_first_three)
-	context.udf.register("first", first__f)
+	# context.udf.register("sanitize", san)
+	# context.udf.register("three", remove_first_three)
+	# context.udf.register("first", first__f)
 
-	labeled_data = context.read.format('csv').options(header="true").load('labeled_data.csv')
-	labeled = labeled_data.select(col("`Input.id`").alias("id"), col("labeldjt").alias("trump"))
-	# https://stackoverflow.com/questions/29936156/get-csv-to-spark-dataframe
+	# labeled_data = context.read.format('csv').options(header="true").load('labeled_data.csv')
+	# labeled = labeled_data.select(col("`Input.id`").alias("id"), col("labeldjt").alias("trump"))
+	# # https://stackoverflow.com/questions/29936156/get-csv-to-spark-dataframe
 
-	# comments = sqlContext.read.json("comments-minimal.json.bz2")
-	# submissions = sqlContext.read.json("submissions.json.bz2")
+	# # comments = sqlContext.read.json("comments-minimal.json.bz2")
+	# # submissions = sqlContext.read.json("submissions.json.bz2")
 
-	comments = sqlContext.read.load("comments_data.parquet")
-	submissions = sqlContext.read.load("submissions_data.parquet")
+	# comments = sqlContext.read.load("comments_data.parquet")
+	# submissions = sqlContext.read.load("submissions_data.parquet")
 
-	comments.createOrReplaceTempView('comments')
-	submissions.createOrReplaceTempView('submissions')
-	labeled.createOrReplaceTempView('labeled')
+	# comments.createOrReplaceTempView('comments')
+	# submissions.createOrReplaceTempView('submissions')
+	# labeled.createOrReplaceTempView('labeled')
 
-	sanitized = sqlContext.sql('select sanitize(body) as san, if(trump = 1, 1, 0) as positive, '
-		'if(trump = -1, 1, 0) as negative from comments inner join labeled on comments.id = labeled.id')
-	sanitized = sanitized.withColumn("san", split(col("san"), " ").cast("array<string>").alias("san"))
-
-
-	cv = CountVectorizer(inputCol = "san", outputCol = "features", binary=True, minDF=5.0)
-	cvmodel = cv.fit(sanitized)
-	result = cvmodel.transform(sanitized)
-	result.createOrReplaceTempView('results')
-
-	pos = sqlContext.sql('select positive as label, features from results')
-	neg = sqlContext.sql('select negative as label, features from results')
+	# sanitized = sqlContext.sql('select sanitize(body) as san, if(trump = 1, 1, 0) as positive, '
+	# 	'if(trump = -1, 1, 0) as negative from comments inner join labeled on comments.id = labeled.id')
+	# sanitized = sanitized.withColumn("san", split(col("san"), " ").cast("array<string>").alias("san"))
 
 
+	# cv = CountVectorizer(inputCol = "san", outputCol = "features", binary=True, minDF=5.0)
+	# cvmodel = cv.fit(sanitized)
+	# result = cvmodel.transform(sanitized)
+	# result.createOrReplaceTempView('results')
 
-	poslr = LogisticRegression(labelCol="label", featuresCol="features", maxIter=10).setThreshold(0.2)
-	neglr = LogisticRegression(labelCol="label", featuresCol="features", maxIter=10).setThreshold(0.25)
+	# pos = sqlContext.sql('select positive as label, features from results')
+	# neg = sqlContext.sql('select negative as label, features from results')
 
-	posEvaluator = BinaryClassificationEvaluator()
-	negEvaluator = BinaryClassificationEvaluator()
 
-	posParamGrid = ParamGridBuilder().addGrid(poslr.regParam, [1.0]).build()
-	negParamGrid = ParamGridBuilder().addGrid(neglr.regParam, [1.0]).build()
 
-	posCrossval = CrossValidator(
-	    estimator=poslr,
-	    evaluator=posEvaluator,
-	    estimatorParamMaps=posParamGrid,
-	    numFolds=5)
-	negCrossval = CrossValidator(
-	    estimator=neglr,
-	    evaluator=negEvaluator,
-	    estimatorParamMaps=negParamGrid,
-	    numFolds=5)
+	# poslr = LogisticRegression(labelCol="label", featuresCol="features", maxIter=10).setThreshold(0.2)
+	# neglr = LogisticRegression(labelCol="label", featuresCol="features", maxIter=10).setThreshold(0.25)
+
+	# posEvaluator = BinaryClassificationEvaluator()
+	# negEvaluator = BinaryClassificationEvaluator()
+
+	# posParamGrid = ParamGridBuilder().addGrid(poslr.regParam, [1.0]).build()
+	# negParamGrid = ParamGridBuilder().addGrid(neglr.regParam, [1.0]).build()
+
+	# posCrossval = CrossValidator(
+	#     estimator=poslr,
+	#     evaluator=posEvaluator,
+	#     estimatorParamMaps=posParamGrid,
+	#     numFolds=5)
+	# negCrossval = CrossValidator(
+	#     estimator=neglr,
+	#     evaluator=negEvaluator,
+	#     estimatorParamMaps=negParamGrid,
+	#     numFolds=5)
 	
-	posTrain, posTest = pos.randomSplit([0.5, 0.5])
-	negTrain, negTest = neg.randomSplit([0.5, 0.5])
+	# posTrain, posTest = pos.randomSplit([0.5, 0.5])
+	# negTrain, negTest = neg.randomSplit([0.5, 0.5])
 
-	print("Training positive classifier...")
-	posModel = posCrossval.fit(posTrain)
-	print("Training negative classifier...")
-	negModel = negCrossval.fit(negTrain)
+	# print("Training positive classifier...")
+	# posModel = posCrossval.fit(posTrain)
+	# print("Training negative classifier...")
+	# negModel = negCrossval.fit(negTrain)
 
-	# posModel.save("pos.model")
-	# negModel.save("neg.model")
+	# # posModel.save("pos.model")
+	# # negModel.save("neg.model")
 
-	# posModel = CrossValidatorModel.load("pos.model")
-	# negModel = CrossValidatorModel.load("neg.model")
-
-
-	whole = sqlContext.sql('select comments.id as id, comments.author_flair_text as state, '
-		'comments.created_utc as time, submissions.title as title, submissions.score as story_score, '
-		'comments.score as comment_score, sanitize(body) as san from comments inner join '
-		'submissions on submissions.id = three(comments.link_id) where body not like "&gt%" '
-		'and body not like "%\\s%"')
-	whole = whole.withColumn("san", split(col("san"), " ").cast("array<string>").alias("san"))
-	whole.write.parquet("whole.parquet")
-
-	# whole = sqlContext.read.load("whole.parquet")
-
-	whole_result_pos = cvmodel.transform(whole)
-	whole_result_neg = whole_result_pos.select("*")
-
-	pos_ans = posModel.transform(whole_result_pos)
-	neg_ans = negModel.transform(whole_result_neg)
-	pos_ans.createOrReplaceTempView('positive')
-	neg_ans.createOrReplaceTempView('negative')
+	# # posModel = CrossValidatorModel.load("pos.model")
+	# # negModel = CrossValidatorModel.load("neg.model")
 
 
-	final = sqlContext.sql('select positive.id as id, positive.state as state, '
-		'positive.time as time, positive.title as title, positive.comment_score as comment_score, '
-		'positive.story_score as story_score, positive.prediction as pos, negative.prediction as neg '
-		'from positive inner join negative on positive.id = negative.id')
-	final.write.parquet("final.parquet")
-	# final = sqlContext.read.load('final.parquet')
+	# whole = sqlContext.sql('select comments.id as id, comments.author_flair_text as state, '
+	# 	'comments.created_utc as time, submissions.title as title, submissions.score as story_score, '
+	# 	'comments.score as comment_score, sanitize(body) as san from comments inner join '
+	# 	'submissions on submissions.id = three(comments.link_id) where body not like "&gt%" '
+	# 	'and body not like "%\\s%"')
+	# whole = whole.withColumn("san", split(col("san"), " ").cast("array<string>").alias("san"))
+	# whole.write.parquet("whole.parquet")
+
+	# # whole = sqlContext.read.load("whole.parquet")
+
+	# whole_result_pos = cvmodel.transform(whole)
+	# whole_result_neg = whole_result_pos.select("*")
+
+	# pos_ans = posModel.transform(whole_result_pos)
+	# neg_ans = negModel.transform(whole_result_neg)
+	# pos_ans.createOrReplaceTempView('positive')
+	# neg_ans.createOrReplaceTempView('negative')
+
+
+	# final = sqlContext.sql('select positive.id as id, positive.state as state, '
+	# 	'positive.time as time, positive.title as title, positive.comment_score as comment_score, '
+	# 	'positive.story_score as story_score, positive.prediction as pos, negative.prediction as neg '
+	# 	'from positive inner join negative on positive.id = negative.id')
+	# final.write.parquet("final.parquet")
+	final = sqlContext.read.load('final.parquet')
 	final.createOrReplaceTempView('final')
 
 	states = ['Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 
@@ -129,7 +129,7 @@ def main(context):
 		'100 * sum(neg) / count(id) as neg from final group by title')
 	percentage_day = sqlContext.sql('select Date(from_unixtime(time)) as date, '
 		'100 * sum(pos) / count(id) as pos, 100 * sum(neg) / count(id) as neg '
-		'from final group by Date(from_unixtime(time))')
+		'from final group by Date(from_unixtime(time)) order by Date(from_unixtime(time))')
 	percentage_state = sqlContext.sql('select state, 100 * sum(pos) / count(id) as pos, '
 		'100 * sum(neg) / count(id) as neg from final inner join states on states.value = final.state group by state')
 	percentage_comment_score = sqlContext.sql('select comment_score as score, '
@@ -137,12 +137,16 @@ def main(context):
 	percentage_story_score = sqlContext.sql('select story_score as score, '
 		'100 * sum(pos) / count(id) as pos, 100 * sum(neg) / count(id) as neg from final group by story_score')
 
+	# percentage_total.createOrReplaceTempView('total')
+	# sqlContext.sql('select title, pos from total order by pos desc limit 10').show(truncate=False)
+	# sqlContext.sql('select title, neg from total order by neg desc limit 10').show(truncate=False)
 
-	percentage_total.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("total.csv")
+
+	# percentage_total.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("total.csv")
 	percentage_day.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("day.csv")
-	percentage_state.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("state.csv")
-	percentage_comment_score.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("comment_score.csv")
-	percentage_story_score.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("story_score.csv")
+	# percentage_state.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("state.csv")
+	# percentage_comment_score.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("comment_score.csv")
+	# percentage_story_score.repartition(1).write.format("com.databricks.spark.csv").option("header", "true").save("story_score.csv")
 
 
 
