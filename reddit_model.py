@@ -99,8 +99,8 @@ def main(context):
 	print("Training negative classifier...")
 	negModel = negCrossval.fit(negTrain)
 
-	# # posModel.save("pos.model")
-	# # negModel.save("neg.model")
+	# posModel.save("pos.model")
+	# negModel.save("neg.model")
 
 	# posModel = CrossValidatorModel.load("pos.model")
 	# negModel = CrossValidatorModel.load("neg.model")
@@ -197,6 +197,41 @@ def main(context):
 
 	neg_metrics = metric(neg_scoreAndLabels)
 	print("The negative ROC score is: ", neg_metrics.areaUnderROC)
+
+	import matplotlib as mpl
+	mpl.use('agg')
+	import matplotlib.pyplot as plt
+	from sklearn.metrics import roc_curve, auc
+	 
+	fpr = dict()
+	tpr = dict()
+	roc_auc = dict()
+	 
+	y_test = [i[1] for i in pos_results_list]
+	y_score = [i[0] for i in pos_results_list]
+	 
+	fpr, tpr, _ = roc_curve(y_test, y_score)
+	roc_auc = auc(fpr, tpr)
+	 
+
+	plt.figure()
+	plt.plot(fpr, tpr, label='Trump Positive Sentiment; ROC curve (area = %0.2f)' % roc_auc)
+
+	y_test = [i[1] for i in neg_results_list]
+	y_score = [i[0] for i in neg_results_list]
+	 
+	fpr, tpr, _ = roc_curve(y_test, y_score)
+	roc_auc = auc(fpr, tpr)
+
+	plt.plot(fpr, tpr, label='Trump Negative Sentiment; ROC curve (area = %0.2f)' % roc_auc)
+	plt.plot([0, 1], [0, 1], 'k--')
+	plt.xlim([0.0, 1.0])
+	plt.ylim([0.0, 1.05])
+	plt.xlabel('False Positive Rate')
+	plt.ylabel('True Positive Rate')
+	plt.title('Receiver operating characteristic')
+	plt.legend(loc="lower right")
+	plt.savefig("ROC_Graph")
 
 
 
