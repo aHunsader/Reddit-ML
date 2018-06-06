@@ -7,3 +7,5 @@ Uses spark / python to parse reddit data on the 2016 presidential election. Prod
 Uses R to produce plots.
 
 Uses sklearn library to generate ROC curves and AUC values (area under ROC).
+
+See report.pdf for plots.
